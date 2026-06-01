@@ -1,0 +1,18 @@
+<CycloneDDS>
+  <Domain>
+    <General>
+      <!-- Restrict to loopback interface only (replaces ROS_LOCALHOST_ONLY).
+           multicast="true" allows SPDP discovery packets on lo0.
+           AllowMulticast=spdp limits multicast to discovery only;
+           data packets use unicast — prevents the 3x duplication caused by
+           macOS loopback delivering multicast to IPv4, IPv6 and unicast paths. -->
+      <Interfaces>
+        <NetworkInterface name="lo0" multicast="true" />
+      </Interfaces>
+      <AllowMulticast>spdp</AllowMulticast>
+    </General>
+    <Discovery>
+      <ParticipantIndex>auto</ParticipantIndex>
+    </Discovery>
+  </Domain>
+</CycloneDDS>

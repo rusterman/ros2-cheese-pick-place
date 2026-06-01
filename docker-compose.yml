@@ -1,0 +1,16 @@
+services:
+  ros2:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: ros2_dev
+    ports:
+      # Zenoh bridge TCP port — macOS connects here to bridge ROS2 topics
+      - "7447:7447"
+    volumes:
+      - ./src:/ros2_ws/src
+      - ./config:/ros2_ws/config
+    environment:
+      - ROS_DOMAIN_ID=42
+    stdin_open: true
+    tty: true

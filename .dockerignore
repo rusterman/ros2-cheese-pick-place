@@ -1,0 +1,28 @@
+# Nothing is COPYed in the Dockerfile — everything is either fetched at build
+# time (apt, curl) or mounted as a volume at runtime. Exclude all local files
+# to keep the build context minimal and avoid sending large/irrelevant files
+# to the Docker daemon.
+
+# macOS zenoh binary — 15 MB, wrong arch for Linux anyway
+bin/
+
+# Source and config — mounted as volumes, not COPYed
+src/
+config/
+
+# Git history and tooling
+.git/
+.gitignore
+.dockerignore
+
+# Scripts — not used inside the image
+scripts/
+
+# Docs
+docs/
+README.md
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
