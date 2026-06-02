@@ -34,23 +34,27 @@ The bridge is officially maintained by Eclipse and increasingly integrated into 
 
 ```
 macOS
-  Foxglove Studio / ros2 CLI
+  Foxglove Studio                ← native app, WebSocket client
+       ↕ WebSocket localhost:8765
+  ros2 CLI
        ↕ DDS (loopback)
   zenoh-bridge [client]          ← bin/zenoh-bridge-ros2dds (macOS binary)
        ↕ TCP localhost:7447
-─────────────────────────────── Docker port-forward
-       ↕ TCP 0.0.0.0:7447
-  zenoh-bridge [router]          ← installed inside ros2_dev container
+─────────────────────────────── Docker port-forward (7447 + 8765)
+       ↕
+  foxglove_bridge                ← WebSocket server :8765, subscribes to all topics via DDS
+  zenoh-bridge [router]          ← TCP :7447, bridges DDS to macOS CLI tools
        ↕ DDS (domain 42)
   ROS2 nodes (publisher, subscriber, marker_publisher)
 ```
 
-Two bridge instances run simultaneously:
+Three bridge processes run simultaneously:
 
-- **Router** (inside Docker) — listens on TCP port 7447, bridges to ROS2 nodes via DDS
-- **Client** (on macOS) — connects to `localhost:7447` via Docker's port-forward, bridges to macOS tools via DDS
+- **Zenoh router** (inside Docker, port 7447) — bridges ROS2 DDS topics over TCP for the macOS `ros2` CLI
+- **Zenoh client** (on macOS) — connects to `localhost:7447`, makes Docker topics visible to macOS DDS tools
+- **foxglove_bridge** (inside Docker, port 8765) — WebSocket server; subscribes to ROS2 topics via DDS and forwards them to Foxglove Studio over WebSocket
 
-From any ROS2 tool's perspective (on either side), all topics look local. The TCP relay is invisible.
+From Foxglove Studio's perspective, it connects to `ws://localhost:8765` — Docker port-forwards that to `foxglove_bridge` inside the container. No ROS2 or DDS on macOS is needed for visualization.
 
 ## Why a binary in `bin/`
 

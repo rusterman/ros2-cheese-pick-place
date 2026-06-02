@@ -55,7 +55,7 @@ C++ is used for real-time, performance-critical nodes (motion planning, trajecto
 
 ```
 macOS (Apple Silicon)
-├── Foxglove Studio           ← visualizes robot state, markers, camera feed
+├── Foxglove Studio           ← connects via WebSocket ws://localhost:8765
 ├── Gazebo                    ← physics simulation
 ├── ros2 CLI                  ← topic inspection, node management
 ├── zenoh-bridge (client)     ← bridges DDS over TCP
@@ -63,6 +63,7 @@ macOS (Apple Silicon)
 │       └── TCP localhost:7447
 │
 Docker container: ros2_dev    (linux/arm64 image)
+├── foxglove_bridge           ← WebSocket server port 8765, bridges topics to Foxglove
 ├── zenoh-bridge (router)     ← port 7447
 ├── ROS2 nodes (FastDDS, domain 42)
 │   ├── camera_node           ← publishes raw image stream
@@ -143,8 +144,10 @@ cd ros2-cheese-pick-place
 # 2. Download the macOS Zenoh bridge binary (gitignored, run once)
 ./scripts/download_zenoh.sh
 
-# 3. Build Docker image and ROS2 workspace
+# 3. Build Docker image
 docker compose build
+
+# 4. Start container and build ROS2 workspace
 docker compose up -d
 docker exec ros2_dev bash -c "
   source /opt/ros/humble/setup.bash &&
@@ -160,30 +163,37 @@ docker exec ros2_dev bash -c "
 # Terminal 1 — start the container
 docker compose up -d
 
-# Terminal 2 — start Zenoh bridge (keep open)
+# Terminal 2 — start Zenoh bridge (keep open, needed for ros2 CLI on macOS)
 ./scripts/start_bridge.sh
 
-# Terminal 3 — publisher node
+# Terminal 3 — start foxglove_bridge (keep open, needed for Foxglove Studio)
+docker exec -it ros2_dev bash -c "
+  source /opt/ros/humble/setup.bash &&
+  ros2 launch foxglove_bridge foxglove_bridge_launch.xml port:=8765"
+
+# Terminal 4 — publisher node
 docker exec -it ros2_dev bash -c "
   source /opt/ros/humble/setup.bash &&
   source /ros2_ws/install/setup.bash &&
   ros2 run hello_ros2 publisher"
 
-# Terminal 4 — subscriber node
+# Terminal 5 — subscriber node
 docker exec -it ros2_dev bash -c "
   source /opt/ros/humble/setup.bash &&
   source /ros2_ws/install/setup.bash &&
   ros2 run hello_ros2 subscriber"
 
-# Terminal 5 — marker publisher (visible in Foxglove)
+# Terminal 6 — marker publisher (visible in Foxglove)
 docker exec -it ros2_dev bash -c "
   source /opt/ros/humble/setup.bash &&
   source /ros2_ws/install/setup.bash &&
   ros2 run hello_ros2 marker_publisher"
 
-# Terminal 6 — open Foxglove Studio (native macOS app)
-# Connect to: ws://localhost:8765
-# Add panel → 3D → set Fixed Frame = "map" → subscribe to /visualization_marker
+# Terminal 7 — open Foxglove Studio (native macOS app)
+open /Applications/Foxglove.app
+# In Foxglove: Open Connection → Foxglove WebSocket → ws://localhost:8765 → Open
+# IMPORTANT: select "Foxglove WebSocket", NOT "Rosbridge WebSocket"
+# Add panel → 3D → Fixed Frame = "map" → subscribe to /visualization_marker
 ```
 
 ### Inspect topics from macOS

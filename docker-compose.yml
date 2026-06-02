@@ -7,6 +7,8 @@ services:
     ports:
       # Zenoh bridge TCP port — macOS connects here to bridge ROS2 topics
       - "7447:7447"
+      # Foxglove bridge WebSocket — Foxglove Studio connects here for visualization
+      - "8765:8765"
     volumes:
       - ./src:/ros2_ws/src
       - ./config:/ros2_ws/config

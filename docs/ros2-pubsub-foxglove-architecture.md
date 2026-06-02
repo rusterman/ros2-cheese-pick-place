@@ -16,6 +16,7 @@
 In ROS2 every program is a **node** — an independent process with a name. Nodes don't call each other directly. Instead they communicate through **topics**: named message channels that anyone can publish to or subscribe from.
 
 ```
+Docker container (ros2_dev)
 ┌─────────────────────────────────────────────────────────────────┐
 │                        ROS2 Network (DDS)                       │
 │                                                                 │
@@ -24,10 +25,18 @@ In ROS2 every program is a **node** — an independent process with a name. Node
 │  └──────────────────┘                   └───────────────────┘  │
 │                                                                 │
 │  ┌──────────────────┐  /visualization_  ┌───────────────────┐  │
-│  │ MarkerPublisher  │     marker        │  Foxglove Studio  │  │
-│  └──────────────────┘ ────────────────► │  (also a node)    │  │
-│                                         └───────────────────┘  │
-└─────────────────────────────────────────────────────────────────┘
+│  │ MarkerPublisher  │     marker        │ foxglove_bridge   │  │
+│  └──────────────────┘ ────────────────► │ (ROS2 node +      │  │
+│                                         │  WebSocket server)│  │
+│                                         └────────┬──────────┘  │
+└────────────────────────────────────────────────── │ ────────────┘
+                                         WebSocket :8765
+                                         Docker port-forward
+                                                    │
+                                         ┌──────────▼──────────┐
+                                         │   Foxglove Studio   │
+                                         │  (native macOS app) │
+                                         └─────────────────────┘
 ```
 
 Key principle: **nodes don't know who is listening**. A publisher just sends data to a topic. Zero, one, or many subscribers can receive it — the publisher doesn't care.
@@ -157,14 +166,20 @@ Key details:
 
 ## How Foxglove Studio Fits In
 
-Foxglove Studio is **not special** — under the hood it connects to a `foxglove_bridge` node running inside Docker, which subscribes to topics using the exact same API you use in your own nodes:
+Foxglove Studio is a **native macOS app** — it is not a ROS2 node. It connects via WebSocket to `foxglove_bridge`, a ROS2 node running inside Docker that does the actual topic subscriptions:
 
 ```python
-# What foxglove_bridge does internally:
+# What foxglove_bridge does internally for every topic:
 self.create_subscription(Marker, '/visualization_marker', self.forward_over_websocket, 10)
 ```
 
-Foxglove Studio itself is a **native macOS app** that receives topic data over WebSocket (`ws://localhost:8765`) — no X11, no display server, no `conda activate` required.
+`foxglove_bridge` is installed inside Docker via `ros-humble-foxglove-bridge` and launched with:
+
+```bash
+ros2 launch foxglove_bridge foxglove_bridge_launch.xml port:=8765
+```
+
+Docker port-forwards `8765:8765`, so Foxglove Studio on macOS reaches it at `ws://localhost:8765` — no X11, no display server, no `conda activate` required.
 
 ### Why Foxglove over RViz2 for this project
 
@@ -189,11 +204,20 @@ Foxglove Studio itself is a **native macOS app** that receives topic data over W
 ### How to connect Foxglove to your marker
 
 ```
-1. Run:  ros2 run hello_ros2 marker_publisher  (inside Docker)
-2. Open: Foxglove Studio (native macOS app)
-3. Connect → Open Connection → WebSocket → ws://localhost:8765
-4. Add panel → 3D → set Fixed Frame = "map"
-5. Subscribe to /visualization_marker
+1. Inside Docker — launch foxglove_bridge:
+   ros2 launch foxglove_bridge foxglove_bridge_launch.xml port:=8765
+
+2. Inside Docker — launch marker_publisher:
+   ros2 run hello_ros2 marker_publisher
+
+3. Open Foxglove Studio (native macOS app)
+
+4. Open Connection → Foxglove WebSocket → ws://localhost:8765 → Open
+   IMPORTANT: choose "Foxglove WebSocket", NOT "Rosbridge WebSocket"
+
+5. Add panel → 3D → set Fixed Frame = "map"
+   Subscribe to /visualization_marker
+
 6. A green cube appears at (0, 0, 0.5) and refreshes every second
 7. Stop the publisher → cube disappears after 2 seconds (lifetime)
 ```
@@ -230,15 +254,16 @@ Putting it all together when all three programs run simultaneously:
 
 ```
 t=0s
+  foxglove_bridge starts    → WebSocket server listening on :8765
   MarkerPublisher starts    → announces /visualization_marker
   HelloPublisher starts     → announces /hello_topic
   HelloSubscriber starts    → subscribes to /hello_topic
-  Foxglove Studio opens     → connects via ws://localhost:8765
+  Foxglove Studio opens     → connects via ws://localhost:8765 (Foxglove WebSocket)
                               subscribes to /visualization_marker
 
-  DDS auto-connects:
+  DDS auto-connects (inside Docker):
     HelloPublisher      ↔ HelloSubscriber
-    MarkerPublisher     ↔ foxglove_bridge → Foxglove Studio
+    MarkerPublisher     ↔ foxglove_bridge (DDS) → WebSocket → Foxglove Studio
 
 t=1s
   HelloPublisher timer fires
@@ -261,10 +286,11 @@ t=Ns  (publisher stopped)
 
 ## Summary
 
-| | HelloPublisher | HelloSubscriber | MarkerPublisher | Foxglove Studio |
-|---|---|---|---|---|
-| **Node name** | `hello_publisher` | `hello_subscriber` | `marker_publisher` | `foxglove_bridge` |
-| **Role** | Publishes text | Receives text | Publishes 3D shape | Visualizes 3D data |
-| **Topic** | `/hello_topic` (write) | `/hello_topic` (read) | `/visualization_marker` (write) | `/visualization_marker` (read) |
-| **Driven by** | 1s timer | incoming messages | 1s timer | incoming messages |
-| **Output** | Terminal log | Terminal log | Terminal log | 3D render window |
+| | HelloPublisher | HelloSubscriber | MarkerPublisher | foxglove_bridge | Foxglove Studio |
+|---|---|---|---|---|---|
+| **Where** | Docker | Docker | Docker | Docker | macOS |
+| **Node name** | `hello_publisher` | `hello_subscriber` | `marker_publisher` | `foxglove_bridge` | — (not a ROS2 node) |
+| **Role** | Publishes text | Receives text | Publishes 3D shape | Bridges DDS → WebSocket | Renders 3D data |
+| **Topic** | `/hello_topic` (write) | `/hello_topic` (read) | `/visualization_marker` (write) | all topics (read, forwards) | via WebSocket |
+| **Driven by** | 1s timer | incoming messages | 1s timer | incoming messages | incoming WebSocket frames |
+| **Output** | Terminal log | Terminal log | Terminal log | WebSocket stream | 3D render window |

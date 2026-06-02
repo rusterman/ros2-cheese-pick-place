@@ -6,6 +6,7 @@ RUN apt-get update && apt-get install -y \
     ros-humble-geometry-msgs \
     ros-humble-tf2-ros \
     ros-humble-tf2-geometry-msgs \
+    ros-humble-foxglove-bridge \
     curl \
     unzip \
     && rm -rf /var/lib/apt/lists/*
